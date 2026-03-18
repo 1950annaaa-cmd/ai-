@@ -1,204 +1,128 @@
 ---
-name: database
-description: Create and manage Replit's built-in PostgreSQL databases, check status, execute SQL queries with safety checks, and run read-only queries against the production database. Use when the user wants to check prod data, debug database issues in production, or asks to "check the prod db", "query production", "look at live data", or "see what's in the database on the deployed app".
+name: data-visualization
+description: Build interactive data visualization apps (dashboards, analysis reports, dataset explorers) with React, Recharts, and OpenAPI codegen workflow. Handles all data sources internally including integrations, databases, APIs, and CSV files.
 ---
 
-# Database Skill
+# Data Visualization Skill
 
-Manage PostgreSQL databases and execute SQL queries safely in your development and production environments.
+This skill helps you create interactive data visualization apps with charts, data tables, and CSV handling.
 
 ## When to Use
 
-Use this skill when:
+Use this skill when the user asks to:
 
-- Creating a new PostgreSQL database for your project
-- Checking if a database is provisioned and accessible
-- Running SQL queries against the development or production database
-- Querying data warehouses (BigQuery, Databricks, Snowflake)
+- **Create a dashboard, report, or data exploration app** with data from any source
+- **Build charts, graphs, or data tables**
+- **Visualize data** from integrations (Stripe, Google Analytics, Linear, databases, etc.)
+- **Create an interactive analytics dashboard** with filters and controls
+- **Build a reporting interface**, metrics dashboard, or analysis report
+- **Explore or investigate a dataset** with filters and drill-down
+- **Combine multiple data sources** into a unified visualization
+
+**Key point:** This skill handles data fetching internally. You do NOT need to query data first using other skills - this skill will use `searchIntegrations()` and `proposeIntegration()` to connect to data sources as part of building the app.
+
+### Example user requests
+
+- "Create a dashboard showing my Stripe revenue"
+- "Build a sales analytics dashboard"
+- "Analyze my revenue data and present the findings"
+- "Create a report explaining why conversions dropped"
+- "Let me explore my customer data with filters"
+- "Build a tool to browse and filter our product catalog"
+- "Visualize this CSV file"
 
 ## When NOT to Use
 
-- Schema migrations in production environments
-- Direct modifications to Stripe tables (use Stripe API instead)
-- Converting a pre-existing database over to Replit, unless a user explicitly asks you to.
+- The user is asking questions about data in chat (e.g., "How many Linear issues were closed last week?") - use `query-integration-data` skill
+- The user simply wants to fetch/export/transform data without visualization - use `query-integration-data` skill
+- The user is not asking for any visual output or web interface
 
-## Available Functions
+## Architecture
 
-### checkDatabase()
+This skill uses the **react-vite scaffold** with backend conventions from the **`pnpm-workspace` skill**:
 
-Check if the PostgreSQL database is provisioned and accessible.
+1. Create the artifact (`createArtifact()` with type `data-visualization`)
+2. Install data-viz packages and patch CSS (chart colors + print styles)
+3. Follow the contract-first backend flow from the `pnpm-workspace` skill (`references/openapi.md`, `references/server.md`, `references/db.md`)
+4. Launch a design subagent (async) for the frontend
+5. Implement API routes in the shared `artifacts/api-server/`
 
-**Parameters:** None
+See `references/common-bootstrap.md` for the full step-by-step workflow.
 
-**Returns:** Dict with `provisioned` (bool) and `message` (str)
+**IMPORTANT:** Data visualization artifacts must use the design subagent workflow, not generateFrontend(). The reference files contain critical layout and styling specifications that only the design subagent can consume.
 
-**Example:**
+## App Type Classification
 
-```javascript
-const status = await checkDatabase();
-if (status.provisioned) {
-    console.log("Database is ready!");
-} else {
-    console.log(status.message);
-    // Consider calling createDatabase()
-}
-```
+Classify the user's request into one of three types. If ambiguous, default to Dashboard.
 
-### createDatabase()
+### Dashboard (default)
 
-Create or verify a PostgreSQL database exists for the project.
+**Signals:** "dashboard", "monitor", "KPIs", "metrics overview", "analytics", "track", "real-time"
 
-**Parameters:** None
+**Layout:** KPI cards + grid of charts + optional detail table. Wide container (`max-w-[1400px]`).
 
-**Returns:** Dict with:
+**Read these references:**
 
-- `success` (bool): Whether operation succeeded
-- `message` (str): Status message
-- `alreadyExisted` (bool): True if database already existed
-- `secretKeys` (list): Environment variables set (DATABASE_URL, PGHOST, etc.)
+- `references/common-bootstrap.md` — Setup and workflow
+- `references/dashboard-workflow.md` — Steps 5-6, checklist, subagent template
+- `references/dashboard-layout.md` — Grid patterns, KPI cards
+- `references/dashboard-controls.md` — Split refresh with auto-refresh, date filters
 
-**Example:**
+**Page structure:** See `references/dashboard-page-structure.md` for composition skeleton
 
-```javascript
-const result = await createDatabase();
-if (result.success) {
-    console.log(`Database ready! Environment variables: ${result.secretKeys}`);
-    // Now you can use DATABASE_URL in your application
-}
-```
+---
 
-### executeSql()
+### Analysis Report
 
-Execute a SQL query with safety checks.
+**Signals:** "report", "analysis", "findings", "explain", "why is", "summarize", "readout", "review", "assessment"
 
-**Parameters:**
+**Layout:** Vertical narrative with embedded charts and written analysis. Narrow container (`max-w-[900px]`).
 
-- `sqlQuery` (str, required): The SQL query to execute
-- `target` (str, default "replit_database"): Target database: "replit_database", "bigquery", "databricks", or "snowflake"
-- `environment` (str, default "development"): "development" runs against the development database (all SQL operations supported). "production" runs READ-ONLY queries against a replica of the production database (only SELECT queries allowed). Production is only supported for the "replit_database" target. "production" database, depending on when the user last deployed, may have outdated schemas.
-- `sampleSize` (int, optional): Sample size for warehouse queries (only for bigquery/databricks/snowflake)
+**Read these references:**
 
-**Returns:** Dict with:
+- `references/common-bootstrap.md` — Setup and workflow
+- `references/report-workflow.md` — Steps 5-6, checklist, subagent template
+- `references/report-layout.md` — Executive summary, section cards, recommendations
 
-- `success` (bool): Whether query succeeded
-- `output` (str): Query output/results
-- `exitCode` (int): Exit code (0 = success)
-- `exitReason` (str | None): Reason for exit if failed
+**Page structure:** See `references/report-page-structure.md` for composition skeleton
 
-**Example:**
+---
 
-```javascript
-// Simple SELECT query
-const result = await executeSql({ sqlQuery: "SELECT * FROM users LIMIT 5" });
-if (result.success) {
-    console.log(result.output);
-}
+### Dataset Explorer
 
-// CREATE TABLE
-const result2 = await executeSql({
-    sqlQuery: `
-        CREATE TABLE IF NOT EXISTS products (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            price DECIMAL(10, 2)
-        )
-    `
-});
+**Signals:** "explore", "investigate", "browse", "filter", "drill down", "search data", "let me query", "look through"
 
-// INSERT data
-const result3 = await executeSql({
-    sqlQuery: `
-        INSERT INTO products (name, price)
-        VALUES ('Widget', 19.99)
-    `
-});
+**Layout:** Sidebar filters + central data table + reactive charts. Wide container (`max-w-[1600px]`).
 
-// Read-only production query
-const result4 = await executeSql({
-    sqlQuery: "SELECT * FROM users WHERE active = true",
-    environment: "production"
-});
+**Read these references:**
 
-// Data warehouse query with sampling
-const result5 = await executeSql({
-    sqlQuery: "SELECT * FROM sales_data WHERE year = 2024",
-    target: "bigquery",
-    sampleSize: 100
-});
-```
+- `references/common-bootstrap.md` — Setup and workflow
+- `references/explorer-workflow.md` — Steps 5-6, checklist, subagent template
+- `references/explorer-layout.md` — Filter sidebar, data table, reactive charts
 
-## Safety Features
+**Page structure:** See `references/explorer-page-structure.md` for composition skeleton
 
-1. **Environment Isolation**: Development queries run against the development database; production queries are READ-ONLY against a read replica
-2. **Stripe Protection**: Mutations to Stripe schema tables (stripe.*) are blocked
-3. **Discussion Mode**: Mutating queries are blocked in Planning/Discussion mode
-4. **Destructive Query Protection**: DROP, TRUNCATE, etc. are blocked via the skill callback path (use the tool interface directly for destructive operations that require user confirmation)
+---
 
-## Best Practices
+## Common References (all types)
 
-1. **Prefer the built-in database**: Replit's built-in PostgreSQL database is always preferred over external services like Supabase. It supports rollback and integrates directly with the Replit product. Only use external database services if the user has specific requirements. The `pg` package should be installed already.
-2. **Check before creating**: Call `checkDatabase()` before `createDatabase()` to avoid unnecessary operations
-3. **Use parameterized queries**: Avoid string interpolation for user input
-4. **Test queries first**: Run SELECT queries before INSERT/UPDATE/DELETE
-5. **Keep backups**: Important data should be backed up before destructive operations
+These references apply to all three app types. Read as needed:
 
-## Environment Variables
+- `references/common-chart-patterns.md` — CHART_COLORS, CustomTooltip, CustomLegend, dark mode styling, opacity, animation
+- `references/common-chart-types.md` — Chart selection guide, area vs line vs bar, pie/donut best practices
+- `references/common-controls.md` — Dark mode toggle, PDF export, simple refresh, CSV export per chart
+- `references/common-data-sources.md` — Choose between app DB, integrations, CSV, and direct REST APIs
+- `references/common-loading-states.md` — Skeleton patterns, loading states, empty states
+- `references/common-csv-parsing.md` — PapaParse for client and server CSV handling
+- `references/common-color-guide.md` — Color palette, semantic colors, accessibility
+- `references/common-css-overrides.md` — Tailwind v4 CSS patches, fonts, shadows, chart colors, print styles
+- `references/common-database.md` — Data-viz-specific DB query shaping and DB-backed API caching
+- `references/common-data-tables.md` — TanStack React Table with sorting, filtering, pagination
+- `references/detailed-analysis.md` — Guide for generating comprehensive analysis reports
+- `references/dashboard-page-structure.md` — Dashboard composition skeleton with generated hooks
+- `references/report-page-structure.md` — Report composition skeleton with generated hooks
+- `references/explorer-page-structure.md` — Explorer composition skeleton with generated hooks
 
-After creating a database, these environment variables are available:
+## Handling Truncated Reference Files
 
-- `DATABASE_URL`: Full connection string
-- `PGHOST`: Database host
-- `PGPORT`: Database port (5432)
-- `PGUSER`: Database username
-- `PGPASSWORD`: Database password
-- `PGDATABASE`: Database name
-
-## Example Workflow
-
-```javascript
-// 1. Check if database exists
-const status = await checkDatabase();
-
-if (!status.provisioned) {
-    // 2. Create database
-    const createResult = await createDatabase();
-    if (!createResult.success) {
-        console.log(`Failed: ${createResult.message}`);
-    }
-}
-
-// 3. Create schema
-await executeSql({
-    sqlQuery: `
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    `
-});
-
-// 4. Insert data
-await executeSql({
-    sqlQuery: `
-        INSERT INTO users (email)
-        VALUES ('user@example.com')
-    `
-});
-
-// 5. Query data
-const result = await executeSql({ sqlQuery: "SELECT * FROM users" });
-console.log(result.output);
-```
-
-## Limitations
-
-- Production queries are READ-ONLY (SELECT only) — INSERT, UPDATE, DELETE, and DDL statements will fail
-- Production environment is only supported for the "replit_database" target (not data warehouses)
-- Cannot modify Stripe schema tables (read-only)
-- Destructive queries (DROP, TRUNCATE, etc.) are blocked via the skill callback path
-- Mutating queries blocked in Planning mode
-
-## Rollbacks
-
-As stated in the diagnostic skills, the development database support rollbacks. Open that skill for more information.
+**IMPORTANT:** When reading a reference file, the output may be truncated (indicated by `...[Truncated]` at the end). If truncated, note the last line number shown and re-read the file with `offset` set to that line number minus 10 (for overlap). Repeat until no `...[Truncated]` appears. Do not act on partial instructions from a truncated file.
