@@ -1,0 +1,10 @@
+Update AI models and integrate new chat functionality
+
+Adjusted API server to use `openai/gpt-4o-mini` via OpenRouter for chat, updated `openai` package version, and incorporated `max_completion_tokens` for summary generation.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 457eceaf-482c-4b9c-8068-e920288cbf61
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 544d3b3e-78fa-447c-a78f-71e58a6f3cc8
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/6e8de843-1537-46dc-9651-21643548aae4/457eceaf-482c-4b9c-8068-e920288cbf61/8YX3Rp7
+Replit-Helium-Checkpoint-Created: true
